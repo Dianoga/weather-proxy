@@ -8,14 +8,33 @@ const stUrl = process.env.ST_URL;
 
 const app = express();
 
+let oldData = {};
+
+function isDifferent(oldData, newData, skipKeys = ['dateutc']) {
+	return !Object.keys(newData).every(key => {
+		if (skipKeys.includes(key)) return true;
+
+		return oldData[key] && oldData[key] === newData[key];
+	});
+}
+
 app.get('*', async (req, res) => {
+	const data = req.query;
+
+	// Check if the data has changed. If not, don't send an update
+	if (!isDifferent(oldData, data)) {
+		console.debug('Nothing changed');
+		return;
+	}
+
+	oldData = { ...data };
+
 	// Update wunderground
 	try {
-		const data = req.query;
 		data.dateutc = moment.utc().format('YYYY-MM-DD HH:mm:ss');
-		const wuUrl = `http://${req.hostname}${req.path}?${querystring.stringify(
-			data
-		)}`;
+		const wuUrl = `http://${req.hostname}${
+			req.path
+		}?${querystring.stringify(data)}`;
 		const wuResp = await fetch(wuUrl);
 
 		const respBody = await wuResp.text();
@@ -37,7 +56,6 @@ app.get('*', async (req, res) => {
 	// ST Update
 	try {
 		delete req.query.PASSWORD;
-		console.log(req.query);
 		const stResp = await fetch(stUrl, {
 			method: 'POST',
 			body: JSON.stringify(req.query)
