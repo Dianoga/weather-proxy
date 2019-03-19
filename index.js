@@ -24,16 +24,18 @@ app.get('*', async (req, res) => {
 	const data = req.query;
 
 	// Have to manually calculate the windchill as ObserverIP is unreliable when it's below -40
-	const feels = new Feels();
-	feels.setOptions({
-		temp: parseFloat(data.tempf),
-		humidity: parseFloat(data.humidity),
-		speed: parseFloat(data.windspeedmph),
-		units: { speed: 'mph', temp: 'f' }
-	});
+	if (data.windchillf < 32) {
+		const feels = new Feels();
+		feels.setOptions({
+			temp: parseFloat(data.tempf),
+			humidity: parseFloat(data.humidity),
+			speed: parseFloat(data.windspeedmph),
+			units: { speed: 'mph', temp: 'f' }
+		});
 
-	const newWindChill = feels.windChill();
-	data.windchillf = Math.round(newWindChill * 100) / 100; // This is imperfect, but good enough for rounding to 2 decimals
+		const newWindChill = feels.windChill();
+		data.windchillf = Math.round(newWindChill * 100) / 100; // This is imperfect, but good enough for rounding to 2 decimals
+	}
 
 	// Check if the data has changed. If not, don't send an update
 	if (!isDifferent(oldData, data)) {
