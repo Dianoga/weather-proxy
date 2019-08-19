@@ -23,8 +23,13 @@ function isDifferent(oldData, newData, skipKeys = ['dateutc']) {
 app.get('*', async (req, res) => {
 	const data = req.query;
 
-	// Have to manually calculate the windchill as ObserverIP is unreliable when it's below -40
+	if (parseFloat(data.tempf) < -100 || parseFloat(data.windspeedmph) < 0) {
+		console.debug('Bad data');
+		return;
+	}
+
 	if (data.windchillf < 32) {
+		// Have to manually calculate the windchill as ObserverIP is unreliable when it's below -40
 		const feels = new Feels();
 		feels.setOptions({
 			temp: parseFloat(data.tempf),
