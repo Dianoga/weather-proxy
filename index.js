@@ -28,7 +28,7 @@ app.get('*', async (req, res) => {
 		return;
 	}
 
-	if (data.windchillf < 32) {
+	if (data.tempf < 32) {
 		// Have to manually calculate the windchill as ObserverIP is unreliable when it's below -40
 		const feels = new Feels();
 		feels.setOptions({
