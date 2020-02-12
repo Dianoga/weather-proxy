@@ -31,6 +31,8 @@ const valToNumber = val => {
 	return parsed;
 };
 
+const date = () => new Date().toISOString();
+
 const fetchFromStation = async () => {
 	const resp = await fetch(stationUrl);
 	const respData = await resp.text();
@@ -73,12 +75,15 @@ const updateWunderground = async rawData => {
 		const respBody = await wuResp.text();
 
 		if (wuResp.ok) {
-			console.log('WU update success');
+			console.log(`${date()}: WU update success`);
 		} else {
-			console.warn(`WU update error (${wuResp.status})`, respBody);
+			console.warn(
+				`${date()}: WU update error (${wuResp.status})`,
+				respBody
+			);
 		}
 	} catch (e) {
-		console.error('WU Update failed', e);
+		console.error(`${date()}: WU Update failed`, e);
 	}
 };
 
@@ -91,9 +96,9 @@ const updateSmartThings = async rawData => {
 			body: JSON.stringify(data)
 		});
 		if (debug) console.debug(JSON.stringify(data));
-		console.log('ST update success');
+		console.log(`${date()}: ST update success`);
 	} catch (e) {
-		console.error('ST Update failed', e);
+		console.error(`${date()}: ST Update failed`, e);
 	}
 };
 
