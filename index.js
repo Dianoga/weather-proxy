@@ -4,7 +4,7 @@ const querystring = require('querystring');
 const moment = require('moment');
 const Feels = require('feels');
 
-const stationUrl = 'http://10.0.1.5/livedata.htm';
+const stationUrl = process.env.OBSERVER_URL;
 const stUrl = process.env.ST_URL;
 const wundergroundStation = process.env.WUNDERGROUND_STATION;
 const wundergroundPassword = process.env.WUNDERGROUND_PASSWORD;
@@ -17,14 +17,14 @@ const debug = !!process.env.DEBUG;
 let oldData = {};
 
 function isDifferent(oldData, newData, skipKeys = ['dateutc']) {
-	return !Object.keys(newData).every(key => {
+	return !Object.keys(newData).every((key) => {
 		if (skipKeys.includes(key)) return true;
 
 		return oldData[key] && oldData[key] === newData[key];
 	});
 }
 
-const valToNumber = val => {
+const valToNumber = (val) => {
 	const parsed = parseFloat(val);
 
 	if (parsed === NaN) return null;
@@ -51,13 +51,13 @@ const fetchFromStation = async () => {
 		UV: valToNumber($('[name=uv]').val()),
 		rainin: valToNumber($('[name=rainofhourly]').val()),
 		dailyrainin: valToNumber($('[name=rainofdaily]').val()),
-		baromin: valToNumber($('[name=AbsPress]').val())
+		baromin: valToNumber($('[name=AbsPress]').val()),
 	};
 
 	return data;
 };
 
-const updateWunderground = async rawData => {
+const updateWunderground = async (rawData, res) => {
 	const data = { ...rawData };
 
 	data.action = 'updateraw';
@@ -74,6 +74,13 @@ const updateWunderground = async rawData => {
 
 		const respBody = await wuResp.text();
 
+		if (res) {
+			wuResp.headers.forEach((val, key) => {
+				res.set(key, val);
+			});
+			res.send(respBody);
+		}
+
 		if (wuResp.ok) {
 			console.log(`${date()}: WU update success`);
 		} else {
@@ -87,13 +94,14 @@ const updateWunderground = async rawData => {
 	}
 };
 
-const updateSmartThings = async rawData => {
+const updateSmartThings = async (rawData) => {
 	const data = { ...rawData };
 
 	try {
+		delete data.PASSWORD;
 		const stResp = await fetch(stUrl, {
 			method: 'POST',
-			body: JSON.stringify(data)
+			body: JSON.stringify(data),
 		});
 		if (debug) console.debug(JSON.stringify(data));
 		console.log(`${date()}: ST update success`);
@@ -102,7 +110,7 @@ const updateSmartThings = async rawData => {
 	}
 };
 
-const handleData = async data => {
+const processData = async (data) => {
 	if (parseFloat(data.tempf) < -100 || parseFloat(data.windspeedmph) < 0) {
 		console.debug('Bad data');
 		return;
@@ -115,7 +123,7 @@ const handleData = async data => {
 			temp: parseFloat(data.tempf),
 			humidity: parseFloat(data.humidity),
 			speed: parseFloat(data.windspeedmph),
-			units: { speed: 'mph', temp: 'f' }
+			units: { speed: 'mph', temp: 'f' },
 		});
 
 		const newWindChill = feels.windChill();
@@ -129,20 +137,46 @@ const handleData = async data => {
 	}
 
 	oldData = { ...data };
-
-	await updateWunderground(data);
-	await updateSmartThings(data);
+	return data;
 };
 
 const run = async () => {
 	try {
+		console.log(`${date()}: Fetching latest data`);
 		const data = await fetchFromStation();
-		if (data) await handleData(data);
+		if (data) {
+			const processedData = await processData(data);
+			await updateWunderground(processedData);
+			await updateSmartThings(processedData);
+		}
 	} catch (e) {
 		console.error(e);
+	} finally {
+		setTimeout(run, interval);
 	}
-
-	setTimeout(run, interval);
 };
 
-run();
+if (process.env.RUN_METHOD === 'push') {
+	const express = require('express');
+	const app = express();
+	app.get('*', async (req, res) => {
+		const data = { ...req.query };
+		try {
+			if (data) {
+				const processedData = await processData(data);
+				await updateWunderground(processedData, res);
+				await updateSmartThings(processedData);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	});
+
+	app.listen(process.env.PORT);
+} else if (process.env.RUN_METHOD === 'poll') {
+	run();
+} else {
+	console.error(
+		'No run method specified. RUN_METHOD must be either push or poll'
+	);
+}
