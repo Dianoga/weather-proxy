@@ -111,9 +111,12 @@ const updateSmartThings = async (rawData) => {
 };
 
 const processData = async (data) => {
-	if (parseFloat(data.tempf) < -100 || parseFloat(data.windspeedmph) < 0) {
-		console.debug('Bad data');
-		return;
+	if (
+		!data.tempf ||
+		parseFloat(data.tempf) < -100 ||
+		parseFloat(data.windspeedmph) < 0
+	) {
+		throw new Error('Bad data', data);
 	}
 
 	if (data.tempf < 32) {
@@ -164,8 +167,10 @@ if (process.env.RUN_METHOD === 'push') {
 		try {
 			if (data) {
 				const processedData = await processData(data);
-				await updateWunderground(processedData, res);
-				await updateSmartThings(processedData);
+				if (processedData) {
+					await updateWunderground(processedData, res);
+					await updateSmartThings(processedData);
+				}
 			}
 		} catch (e) {
 			console.error(e);
